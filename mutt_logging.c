@@ -228,6 +228,27 @@ int log_disp_curses(time_t stamp, const char *file, int line,
 }
 
 /**
+ * log_listener - XXX
+ */
+bool log_listener(const struct ConfigSet *cs, struct HashElem *he, const char *name, enum ConfigEvent ev)
+{
+  static struct HashElem *level = NULL;
+  static struct HashElem *file = NULL;
+
+  if (!level && (strcmp(name, "debug_level") == 0))
+    level = he;
+
+  if (!file && (strcmp(name, "debug_file") == 0))
+    file = he;
+
+  if ((he != level) && (he != file))
+    return true;
+
+  mutt_debug(1, "LOG CONFIG EVENT\n");
+  return true;
+}
+
+/**
  * mutt_log_start - Enable file logging
  * @retval  0 Success, or already running
  * @retval -1 Failed to start
@@ -254,8 +275,10 @@ int mutt_log_start(void)
   FREE(&name);
 
   /* This will trigger the file creation */
-  if (log_file_set_level(DebugLevel, true) < 1)
+  if (log_file_set_level(DebugLevel, true) < 0)
     return -1;
+
+  cs_add_listener(Config, log_listener);
 
   return 0;
 }
@@ -310,7 +333,7 @@ int mutt_log_set_file(const char *file, bool verbose)
 
   log_file_set_filename(name, verbose);
   FREE(&name);
-  mutt_str_replace(&DebugFile, file);
+  cs_str_string_set (Config, "debug_file", file, NULL);
 
   return 0;
 }

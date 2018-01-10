@@ -203,7 +203,10 @@ static int start_curses(void)
   meta(stdscr, true);
 #endif
   init_extended_keys();
-  mutt_window_reflow();
+  /* Now that curses is set up, we drop back to normal screen mode.
+   * This simplifies displaying error messages to the user.
+   * The first call to refresh() will swap us back to curses screen mode. */
+  endwin();
   return 0;
 }
 
@@ -235,16 +238,19 @@ static void init_locale(void)
 
 /**
  * get_user_info - Find the user's name, home and shell
- * @retval 0 Success
- * @retval 1 Error
+ * @param cs Config Set
+ * @retval true Success
  *
  * Find the login name, real name, home directory and shell.
  */
-static int get_user_info(void)
+bool get_user_info(struct ConfigSet *cs)
 {
-  Username = mutt_str_strdup(mutt_str_getenv("USER"));
-  HomeDir = mutt_str_strdup(mutt_str_getenv("HOME"));
-  Shell = mutt_str_strdup(mutt_str_getenv("SHELL"));
+  mutt_str_replace(&Username, mutt_str_getenv("USER"));
+  mutt_str_replace(&HomeDir, mutt_str_getenv("HOME"));
+
+  const char *shell = mutt_str_getenv("SHELL");
+  if (shell)
+    cs_str_initial_set(cs, "shell", shell, NULL);
 
   /* Get some information about the user */
   struct passwd *pw = getpwuid(getuid());
@@ -254,30 +260,88 @@ static int get_user_info(void)
       Username = mutt_str_strdup(pw->pw_name);
     if (!HomeDir)
       HomeDir = mutt_str_strdup(pw->pw_dir);
-    if (!Shell)
-      Shell = mutt_str_strdup(pw->pw_shell);
-
-    char rnbuf[STRING];
-    Realname = mutt_str_strdup(mutt_gecos_name(rnbuf, sizeof(rnbuf), pw));
-    endpwent();
+    if (!shell)
+      cs_str_initial_set(cs, "shell", pw->pw_shell, NULL);
   }
 
   if (!Username)
   {
     mutt_error(_("unable to determine username"));
-    return 1; // TEST05: neomutt (unset $USER, delete user from /etc/passwd)
+    return false; // TEST05: neomutt (unset $USER, delete user from /etc/passwd)
   }
 
   if (!HomeDir)
   {
     mutt_error(_("unable to determine home directory"));
-    return 1; // TEST06: neomutt (unset $HOME, delete user from /etc/passwd)
+    return false; // TEST06: neomutt (unset $HOME, delete user from /etc/passwd)
   }
 
-  if (!Shell)
-    Shell = mutt_str_strdup("/bin/sh");
+  cs_str_reset(cs, "shell", NULL);
+  return true;
+}
 
-  return 0;
+/**
+ * test_myvar - XXX
+ */
+void test_parse_set(void)
+{
+  char *vars[] = {
+    "from",        // ADDRESS
+    "beep",        // BOOL
+    "mbox_type",   // MAGIC
+    "to_chars",    // MBTABLE
+    "net_inc",     // NUMBER
+    "shell",       // PATH
+    "print",       // QUAD
+    "mask",        // REGEX
+    "sort",        // SORT
+    "attribution", // STRING
+    "zzz",         // UNKNOWN
+    "my_var",      // MY_VAR
+  };
+
+  char *commands[] = {
+    "set",
+    "toggle",
+    "reset",
+    "unset",
+  };
+
+  char *tests[] = {
+    "%s %s",       "%s %s=42",  "%s %s?",     "%s ?%s",    "%s ?%s=42",
+    "%s ?%s?",     "%s no%s",   "%s no%s=42", "%s no%s?",  "%s inv%s",
+    "%s inv%s=42", "%s inv%s?", "%s &%s",     "%s &%s=42", "%s &%s?",
+  };
+
+  struct Buffer *tmp = mutt_buffer_alloc(STRING);
+  struct Buffer *err = mutt_buffer_alloc(STRING);
+  char line[64];
+
+  for (size_t v = 0; v < mutt_array_size(vars); v++)
+  {
+    // printf("--------------------------------------------------------------------------------\n");
+    // printf("VARIABLE %s\n", vars[v]);
+    for (size_t c = 0; c < mutt_array_size(commands); c++)
+    {
+      // printf("----------------------------------------\n");
+      // printf("COMMAND %s\n", commands[c]);
+      for (size_t t = 0; t < mutt_array_size(tests); t++)
+      {
+        mutt_buffer_reset(tmp);
+        mutt_buffer_reset(err);
+
+        snprintf(line, sizeof(line), tests[t], commands[c], vars[v]);
+        printf("%-26s", line);
+        int rc = mutt_parse_rc_line(line, tmp, err);
+        printf("%2d %s\n", rc, NONULL(err->data));
+      }
+      printf("\n");
+    }
+    // printf("\n");
+  }
+
+  mutt_buffer_free(&tmp);
+  mutt_buffer_free(&err);
 }
 
 /**
@@ -340,7 +404,6 @@ int main(int argc, char *argv[], char *envp[])
   umask(077);
 
   mutt_envlist_init(envp);
-
   for (optind = 1; optind < double_dash;)
   {
     /* We're getopt'ing POSIXLY, so we'll be here every time getopt()
@@ -482,22 +545,31 @@ int main(int argc, char *argv[], char *envp[])
     goto main_ok; // TEST04: neomutt -v
   }
 
-  if (get_user_info() != 0)
-  {
+  Config = init_config(500);
+  if (!Config)
+    goto main_curses;
+
+  // cs_str_initial_set(Config, "from", "rich@flatcap.org", NULL);
+  // cs_str_reset(Config, "from", NULL);
+  // myvar_set("my_var", "foo");
+  // test_parse_set();
+  // return 0;
+
+  // {
+  //   struct Buffer *value = mutt_buffer_alloc(STRING);
+  //   var_to_string2("sidebar_visible", true, value, NULL);
+  //   printf("%s\n", value->data);
+  //   mutt_buffer_free(&value);
+  //   return 0;
+  // }
+
+  if (!get_user_info(Config))
     goto main_exit;
-  }
 
   if (dfile)
   {
-    set_default_value("debug_file", (intptr_t) mutt_str_strdup(dfile));
-    mutt_str_replace(&DebugFile, dfile);
-  }
-  else
-  {
-    /* Make sure that the DebugFile has a value */
-    LogAllowDebugSet = true;
-    reset_value("debug_file");
-    LogAllowDebugSet = false;
+    cs_str_initial_set(Config, "debug_file", dfile, NULL);
+    cs_str_reset(Config, "debug_file", NULL);
   }
 
   if (dlevel)
@@ -508,8 +580,8 @@ int main(int argc, char *argv[], char *envp[])
       mutt_error(_("Error: value '%s' is invalid for -d."), dlevel);
       goto main_exit; // TEST07: neomutt -d xyz
     }
-    set_default_value("debug_level", (intptr_t) num);
-    DebugLevel = num;
+    cs_str_initial_set(Config, "debug_level", dlevel, NULL);
+    cs_str_reset(Config, "debug_level", NULL);
   }
 
   if (dlevel)
@@ -558,27 +630,24 @@ int main(int argc, char *argv[], char *envp[])
   if (!OptNoCurses)
   {
     int crc = start_curses();
-    /* Now that curses is set up, we drop back to normal screen mode.
-     * This simplifies displaying error messages to the user.
-     * The first call to refresh() will swap us back to curses screen mode. */
-    endwin();
 
     if (crc != 0)
       goto main_curses; // TEST08: can't test -- fake term?
 
     /* check whether terminal status is supported (must follow curses init) */
     TsSupported = mutt_ts_capability();
+    mutt_window_reflow();
   }
 
   /* set defaults and read init files */
   if (mutt_init(flags & MUTT_NOSYSRC, &commands) != 0)
     goto main_curses;
 
-  /* The command line overrides the config */
+    /* The command line overrides the config */
   if (dlevel)
-    reset_value("debug_level");
+    cs_str_reset(Config, "debug_level", NULL);
   if (dfile)
-    reset_value("debug_file");
+    cs_str_reset(Config, "debug_file", NULL);
 
   if (mutt_log_start() < 0)
   {
@@ -593,18 +662,20 @@ int main(int argc, char *argv[], char *envp[])
 #ifdef USE_NNTP
   /* "$news_server" precedence: command line, config file, environment, system file */
   if (cli_nntp)
-    mutt_str_replace(&NewsServer, cli_nntp);
+    cs_str_string_set(Config, "news_server", cli_nntp, NULL);
   if (!NewsServer)
-    NewsServer = mutt_str_strdup(mutt_str_getenv("NNTPSERVER"));
+  {
+    const char *env_nntp = mutt_str_getenv("NNTPSERVER");
+    cs_str_string_set(Config, "news_server", env_nntp, NULL);
+  }
   if (!NewsServer)
   {
     char buffer[1024];
-    char *server =
-        mutt_file_read_keyword(SYSCONFDIR "/nntpserver", buffer, sizeof(buffer));
-    NewsServer = mutt_str_strdup(server);
+    char *server = mutt_file_read_keyword(SYSCONFDIR "/nntpserver", buffer, sizeof(buffer));
+    cs_str_string_set(Config, "news_server", server, NULL);
   }
   if (NewsServer)
-    set_default_value("news_server", (intptr_t) mutt_str_strdup(NewsServer));
+    cs_str_initial_set(Config, "news_server", NewsServer, NULL);
 #endif
 
   /* Initialize crypto backends.  */
@@ -612,14 +683,21 @@ int main(int argc, char *argv[], char *envp[])
 
   if (new_magic)
   {
-    mx_set_magic(new_magic);
-    set_default_value("mbox_type", (intptr_t) MboxType);
+    struct Buffer *err = mutt_buffer_new();
+    int r = cs_str_initial_set(Config, "mbox_type", new_magic, err);
+    if (CSR_RESULT(r) != CSR_SUCCESS)
+    {
+      mutt_error(err->data);
+      mutt_buffer_free(&err);
+      goto main_curses;
+    }
+    mutt_buffer_free(&err);
+    cs_str_reset(Config, "mbox_type", NULL);
   }
 
   if (!STAILQ_EMPTY(&queries))
   {
-    for (; optind < argc; optind++)
-      mutt_list_insert_tail(&queries, mutt_str_strdup(argv[optind]));
+    //QWQ retval test failure
     rc = mutt_query_variables(&queries);
     mutt_list_free(&queries);
     goto main_curses;
@@ -627,7 +705,8 @@ int main(int argc, char *argv[], char *envp[])
 
   if (dump_variables)
   {
-    rc = mutt_dump_variables(hide_sensitive);
+    //QWQ retval? only fails if code is broken
+    dump_config(Config, CS_DUMP_STYLE_NEO, hide_sensitive ? CS_DUMP_HIDE_SENSITIVE : 0);
     goto main_curses; // TEST18: neomutt -D
   }
 
@@ -1089,6 +1168,7 @@ int main(int argc, char *argv[], char *envp[])
 #endif
     log_queue_empty();
     mutt_log_stop();
+    cs_free(&Config);
     mutt_window_free();
     // TEST43: neomutt (no change to mailbox)
     // TEST44: neomutt (change mailbox)
@@ -1107,5 +1187,6 @@ main_exit:
   mutt_envlist_free();
   mutt_free_opts();
   mutt_free_keys();
+  cs_free(&Config);
   return rc;
 }
