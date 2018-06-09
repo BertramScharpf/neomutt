@@ -1929,7 +1929,7 @@ restart:
 int pgp_gpgme_decrypt_mime(FILE *fpin, FILE **fpout, struct Body *b, struct Body **cur)
 {
   char tempfile[PATH_MAX];
-  struct State s;
+  struct State s = { 0 };
   struct Body *first_part = b;
   int is_signed = 0;
   bool need_decode = false;
@@ -1952,7 +1952,6 @@ int pgp_gpgme_decrypt_mime(FILE *fpin, FILE **fpout, struct Body *b, struct Body
   else
     return -1;
 
-  memset(&s, 0, sizeof(s));
   s.fpin = fpin;
 
   if (need_decode)
@@ -2022,7 +2021,7 @@ bail:
 int smime_gpgme_decrypt_mime(FILE *fpin, FILE **fpout, struct Body *b, struct Body **cur)
 {
   char tempfile[PATH_MAX];
-  struct State s;
+  struct State s = { 0 };
   FILE *tmpfp = NULL;
   int is_signed;
   LOFF_T saved_b_offset;
@@ -2042,7 +2041,6 @@ int smime_gpgme_decrypt_mime(FILE *fpin, FILE **fpout, struct Body *b, struct Bo
   saved_b_type = b->type;
   saved_b_offset = b->offset;
   saved_b_length = b->length;
-  memset(&s, 0, sizeof(s));
   s.fpin = fpin;
   fseeko(s.fpin, b->offset, SEEK_SET);
   mutt_mktemp(tempfile, sizeof(tempfile));

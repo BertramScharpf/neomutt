@@ -68,10 +68,9 @@ static short BuffyNotify = 0; /**< # of unnotified new boxes */
 static int fseek_last_message(FILE *f)
 {
   LOFF_T pos;
-  char buffer[BUFSIZ + 9]; /* 7 for "\n\nFrom " */
+  char buffer[BUFSIZ + 9] = { 0 }; /* 7 for "\n\nFrom " */
   size_t bytes_read;
 
-  memset(buffer, 0, sizeof(buffer));
   fseek(f, 0, SEEK_END);
   pos = ftello(f);
 
@@ -371,13 +370,11 @@ static int buffy_mbox_check(struct Buffy *mailbox, struct stat *sb, bool check_s
  */
 static void buffy_check(struct Buffy *tmp, struct stat *contex_sb, bool check_stats)
 {
-  struct stat sb;
+  struct stat sb = { 0 };
 #ifdef USE_SIDEBAR
   short orig_new;
   int orig_count, orig_unread, orig_flagged;
 #endif
-
-  memset(&sb, 0, sizeof(sb));
 
 #ifdef USE_SIDEBAR
   orig_new = tmp->new;

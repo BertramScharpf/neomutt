@@ -156,10 +156,8 @@ static pid_t pgp_invoke(FILE **pgpin, FILE **pgpout, FILE **pgperr, int pgpinfd,
                         int pgperrfd, short need_passphrase, const char *fname,
                         const char *sig_fname, const char *ids, const char *format)
 {
-  struct PgpCommandContext cctx;
+  struct PgpCommandContext cctx = { 0 };
   char cmd[HUGE_STRING];
-
-  memset(&cctx, 0, sizeof(cctx));
 
   if (!format || !*format)
     return (pid_t) -1;
@@ -249,9 +247,7 @@ void pgp_invoke_import(const char *fname)
 {
   char tmp_fname[PATH_MAX + SHORT_STRING];
   char cmd[HUGE_STRING];
-  struct PgpCommandContext cctx;
-
-  memset(&cctx, 0, sizeof(cctx));
+  struct PgpCommandContext cctx = { 0 };
 
   mutt_file_quote_filename(tmp_fname, sizeof(tmp_fname), fname);
   cctx.fname = tmp_fname;
@@ -274,12 +270,10 @@ void pgp_invoke_getkeys(struct Address *addr)
 
   char *personal = NULL;
 
-  struct PgpCommandContext cctx;
+  struct PgpCommandContext cctx = { 0 };
 
   if (!PgpGetkeysCommand)
     return;
-
-  memset(&cctx, 0, sizeof(cctx));
 
   personal = addr->personal;
   addr->personal = NULL;

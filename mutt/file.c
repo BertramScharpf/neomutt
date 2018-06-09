@@ -217,8 +217,7 @@ void mutt_file_unlink(const char *s)
   if (f)
   {
     unlink(s);
-    char buf[2048];
-    memset(buf, 0, sizeof(buf));
+    char buf[2048] = { 0 };
     while (sb.st_size > 0)
     {
       fwrite(buf, 1, MIN(sizeof(buf), sb.st_size), f);
@@ -1102,11 +1101,10 @@ int mutt_file_lock(int fd, int excl, int timeout)
 {
   int count;
   int attempt;
-  struct stat sb = { 0 }, prev_sb = { 0 };
+  struct stat sb = { 0 }
+  struct prev_sb = { 0 };
+  struct flock lck = { 0 };
 
-  struct flock lck;
-
-  memset(&lck, 0, sizeof(struct flock));
   lck.l_type = excl ? F_WRLCK : F_RDLCK;
   lck.l_whence = SEEK_SET;
 
@@ -1151,9 +1149,8 @@ int mutt_file_lock(int fd, int excl, int timeout)
  */
 int mutt_file_unlock(int fd)
 {
-  struct flock unlockit = { F_UNLCK, 0, 0, 0, 0 };
+  struct flock unlockit = { 0 };
 
-  memset(&unlockit, 0, sizeof(struct flock));
   unlockit.l_type = F_UNLCK;
   unlockit.l_whence = SEEK_SET;
   fcntl(fd, F_SETLK, &unlockit);
