@@ -1101,8 +1101,8 @@ int mutt_file_lock(int fd, int excl, int timeout)
 {
   int count;
   int attempt;
-  struct stat sb = { 0 }
-  struct prev_sb = { 0 };
+  struct stat sb = { 0 };
+  struct stat prev_sb = { 0 };
   struct flock lck = { 0 };
 
   lck.l_type = excl ? F_WRLCK : F_RDLCK;

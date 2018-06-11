@@ -1167,7 +1167,7 @@ void mutt_select_file(char *f, size_t flen, int flags, char ***files, int *numfi
   char prefix[PATH_MAX] = "";
   char helpstr[LONG_STRING];
   char title[STRING];
-  struct BrowserState state { 0 };
+  struct BrowserState state = { 0 };
   struct Menu *menu = NULL;
   struct stat st;
   int i, kill_prefix = 0;
