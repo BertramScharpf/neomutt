@@ -484,15 +484,13 @@ void mutt_message_hook(struct Context *ctx, struct Header *hdr, int type)
 
 /**
  * addr_hook - Perform an address hook (get a path)
- * @param path    Buffer for path
- * @param pathlen Length of buffer
  * @param type    Type e.g. #MUTT_FCCHOOK
  * @param ctx     Mailbox Context
  * @param hdr     Email Header
  * @retval  0 Success
  * @retval -1 Failure
  */
-static int addr_hook(char *path, size_t pathlen, int type, struct Context *ctx,
+static int addr_hook(int type, struct Context *ctx,
                      struct Header *hdr)
 {
   struct Hook *hook = NULL;
@@ -510,7 +508,9 @@ static int addr_hook(char *path, size_t pathlen, int type, struct Context *ctx,
       if ((mutt_pattern_exec(hook->pattern, 0, ctx, hdr, &cache) > 0) ^
           hook->regex.not)
       {
-        mutt_make_string(path, pathlen, hook->command, ctx, hdr);
+        char path[PATH_MAX];
+        mutt_make_string(path, sizeof(path), hook->command, ctx, hdr);
+        mutt_str_replace(&hdr->fcc, path);
         return 0;
       }
     }
@@ -528,8 +528,11 @@ static int addr_hook(char *path, size_t pathlen, int type, struct Context *ctx,
 void mutt_default_save(char *path, size_t pathlen, struct Header *hdr)
 {
   *path = '\0';
-  if (addr_hook(path, pathlen, MUTT_SAVEHOOK, Context, hdr) == 0)
+  if (addr_hook(MUTT_SAVEHOOK, Context, hdr) == 0)
+  {
+    mutt_str_strfcpy(path, hdr->fcc, sizeof(path));
     return;
+  }
 
   struct Address *addr = NULL;
   struct Envelope *env = hdr->env;
@@ -555,28 +558,29 @@ void mutt_default_save(char *path, size_t pathlen, struct Header *hdr)
 
 /**
  * mutt_select_fcc - Select the FCC path for an email
- * @param path    Buffer for the path
- * @param pathlen Length of the buffer
  * @param hdr     Email Header
  */
-void mutt_select_fcc(char *path, size_t pathlen, struct Header *hdr)
+void mutt_select_fcc(struct Header *hdr)
 {
-  if (addr_hook(path, pathlen, MUTT_FCCHOOK, NULL, hdr) != 0)
+  if (addr_hook(MUTT_FCCHOOK, NULL, hdr) != 0)
   {
     struct Envelope *env = hdr->env;
     if ((SaveName || ForceName) && (env->to || env->cc || env->bcc))
     {
       struct Address *addr = env->to ? env->to : (env->cc ? env->cc : env->bcc);
-      char buf[PATH_MAX];
+      char buf[PATH_MAX], path[PATH_MAX];
       mutt_safe_path(buf, sizeof(buf), addr);
-      mutt_file_concat_path(path, NONULL(Folder), buf, pathlen);
+      mutt_file_concat_path(path, NONULL(Folder), buf, sizeof(path));
       if (!ForceName && mx_access(path, W_OK) != 0)
-        mutt_str_strfcpy(path, NONULL(Record), pathlen);
+        mutt_str_replace(&hdr->fcc, NONULL(Record));
+      else
+        mutt_str_replace(&hdr->fcc, path);
     }
     else
-      mutt_str_strfcpy(path, NONULL(Record), pathlen);
+      mutt_str_replace(&hdr->fcc, NONULL(Record));
   }
-  mutt_pretty_mailbox(path, pathlen);
+  if (hdr->fcc)
+    mutt_pretty_mailbox(hdr->fcc, mutt_str_strlen(hdr->fcc));
 }
 
 /**

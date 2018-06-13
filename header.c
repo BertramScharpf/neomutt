@@ -39,8 +39,7 @@
 #include "options.h"
 #include "protos.h"
 
-void mutt_edit_headers(const char *editor, const char *body, struct Header *msg,
-                       char *fcc, size_t fcclen)
+void mutt_edit_headers(const char *editor, const char *body, struct Header *msg)
 {
   char path[PATH_MAX]; /* tempfile used to edit headers + body */
   char buffer[LONG_STRING];
@@ -157,13 +156,14 @@ void mutt_edit_headers(const char *editor, const char *body, struct Header *msg,
   {
     bool keep = true;
 
-    if (fcc && (mutt_str_strncasecmp("fcc:", np->data, 4) == 0))
+    if (msg->fcc && (mutt_str_strncasecmp("fcc:", np->data, 4) == 0))
     {
       p = mutt_str_skip_email_wsp(np->data + 4);
       if (*p)
       {
-        mutt_str_strfcpy(fcc, p, fcclen);
-        mutt_pretty_mailbox(fcc, fcclen);
+        mutt_str_replace(&msg->fcc, p);
+        if (msg->fcc)
+          mutt_pretty_mailbox(msg->fcc, mutt_str_strlen(msg->fcc));
       }
       keep = false;
     }
@@ -363,6 +363,7 @@ void mutt_header_free(struct Header **h)
   mutt_body_free(&(*h)->content);
   FREE(&(*h)->maildir_flags);
   FREE(&(*h)->tree);
+  FREE(&(*h)->fcc);
   FREE(&(*h)->path);
 #ifdef MIXMASTER
   mutt_list_free(&(*h)->chain);

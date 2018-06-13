@@ -719,12 +719,12 @@ void mutt_save_path(char *d, size_t dsize, struct Address *a)
     {
       char *p = strpbrk(d, "%@");
       if (p)
-        *p = 0;
+        *p = '\0';
     }
     mutt_str_strlower(d);
   }
   else
-    *d = 0;
+    *d = '\0';
 }
 
 void mutt_safe_path(char *s, size_t l, struct Address *a)

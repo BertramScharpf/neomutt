@@ -1286,11 +1286,11 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
                     struct Context *ctx, struct Header *cur)
 {
   char buffer[LONG_STRING];
-  char fcc[PATH_MAX] = ""; /* where to copy this message */
   FILE *tempfp = NULL;
   struct Body *pbody = NULL;
   int i;
   bool killfrom = false;
+  char fccpath[PATH_MAX];
   bool fcc_error = false;
   bool free_clear_content = false;
 
@@ -1345,7 +1345,7 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
 
     if (flags == SENDPOSTPONED)
     {
-      flags = mutt_get_postponed(ctx, msg, &cur, fcc, sizeof(fcc));
+      flags = mutt_get_postponed(ctx, msg, &cur);
       if (flags < 0)
         goto cleanup;
 #ifdef USE_NNTP
@@ -1634,7 +1634,7 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
       else if (EditHeaders)
       {
         mutt_env_to_local(msg->env);
-        mutt_edit_headers(Editor, msg->content->filename, msg, fcc, sizeof(fcc));
+        mutt_edit_headers(Editor, msg->content->filename, msg);
         mutt_env_to_intl(msg->env, NULL, NULL);
       }
       else
@@ -1795,7 +1795,8 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
   /* specify a default fcc.  if we are in batchmode, only save a copy of
    * the message if the value of $copy is yes or ask-yes */
 
-  if (!fcc[0] && !(flags & (SENDPOSTPONEDFCC)) && (!(flags & SENDBATCH) || (Copy & 0x1)))
+  if ((!msg->fcc || !msg->fcc[0]) &&
+        !(flags & (SENDPOSTPONEDFCC)) && (!(flags & SENDBATCH) || (Copy & 0x1)))
   {
     /* set the default FCC */
     if (!msg->env->from)
@@ -1804,7 +1805,7 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
       killfrom = true; /* no need to check $use_from because if the user specified
                        a from address it would have already been set by now */
     }
-    mutt_select_fcc(fcc, sizeof(fcc), msg);
+    mutt_select_fcc(msg);
     if (killfrom)
     {
       mutt_addr_free(&msg->env->from);
@@ -1818,8 +1819,9 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
   main_loop:
 
     fcc_error = false; /* reset value since we may have failed before */
-    mutt_pretty_mailbox(fcc, sizeof(fcc));
-    i = mutt_compose_menu(msg, fcc, sizeof(fcc), cur,
+    if (msg->fcc)
+      mutt_pretty_mailbox(msg->fcc, mutt_str_strlen(msg->fcc));
+    i = mutt_compose_menu(msg, cur,
                           ((flags & SENDNOFREEHEADER) ? MUTT_COMPOSE_NOFREEHEADER : 0));
     if (i == -1)
     {
@@ -1884,7 +1886,7 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
 
       if (!Postponed || mutt_write_fcc(NONULL(Postponed), msg,
                                        (cur && (flags & SENDREPLY)) ? cur->env->message_id : NULL,
-                                       1, fcc, NULL) < 0)
+                                       1, msg->fcc, NULL) < 0)
       {
         msg->content = mutt_remove_multipart(msg->content);
         decode_descriptions(msg->content);
@@ -2026,7 +2028,8 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
 
   /* save a copy of the message, if necessary. */
 
-  mutt_expand_path(fcc, sizeof(fcc));
+  mutt_str_strfcpy(fccpath, msg->fcc, sizeof(fccpath));
+  mutt_expand_path(fccpath, sizeof(fccpath));
 
   /* Don't save a copy when we are in batch-mode, and the FCC
    * folder is on an IMAP server: This would involve possibly lots
@@ -2038,11 +2041,11 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
    */
 
 #ifdef USE_IMAP
-  if ((flags & SENDBATCH) && fcc[0] && mx_is_imap(fcc))
-    fcc[0] = '\0';
+  if ((flags & SENDBATCH) && fccpath[0] && mx_is_imap(fccpath))
+    fccpath[0] = '\0';
 #endif
 
-  if (*fcc && (mutt_str_strcmp("/dev/null", fcc) != 0))
+  if (*fccpath && (mutt_str_strcmp("/dev/null", fccpath) != 0))
   {
     struct Body *tmpbody = msg->content;
     struct Body *save_sig = NULL;
@@ -2096,7 +2099,7 @@ int ci_send_message(int flags, struct Header *msg, char *tempfile,
        * message was first postponed.
        */
       msg->received = time(NULL);
-      if (mutt_write_multiple_fcc(fcc, msg, NULL, 0, NULL, &finalpath) == -1)
+      if (mutt_write_multiple_fcc(fccpath, msg, NULL, 0, NULL, &finalpath) == -1)
       {
         /*
          * Error writing FCC, we should abort sending.

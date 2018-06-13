@@ -156,8 +156,7 @@ void mutt_display_address(struct Envelope *env);
 void mutt_draw_statusline(int cols, const char *buf, size_t buflen);
 int mutt_edit_content_type (struct Header *h, struct Body *b, FILE *fp);
 void mutt_edit_file(const char *editor, const char *data);
-void mutt_edit_headers(const char *editor, const char *body, struct Header *msg,
-                       char *fcc, size_t fcclen);
+void mutt_edit_headers(const char *editor, const char *body, struct Header *msg);
 int mutt_label_message(struct Header *hdr);
 void mutt_make_label_hash(struct Context *ctx);
 void mutt_label_hash_add(struct Context *ctx, struct Header *hdr);
@@ -203,7 +202,7 @@ void mutt_query_menu(char *buf, size_t buflen);
 void mutt_safe_path(char *s, size_t l, struct Address *a);
 void mutt_save_path(char *d, size_t dsize, struct Address *a);
 void mutt_score_message(struct Context *ctx, struct Header *hdr, bool upd_ctx);
-void mutt_select_fcc(char *path, size_t pathlen, struct Header *hdr);
+void mutt_select_fcc(struct Header *hdr);
 void mutt_select_file(char *f, size_t flen, int flags, char ***files, int *numfiles);
 void mutt_message_hook(struct Context *ctx, struct Header *hdr, int type);
 void mutt_set_flag_update(struct Context *ctx, struct Header *h, int flag, bool bf, bool upd_ctx);
@@ -269,7 +268,7 @@ int mutt_get_hook_type(const char *name);
 int mutt_get_field_unbuffered(char *msg, char *buf, size_t buflen, int flags);
 #define mutt_get_password(A, B, C) mutt_get_field_unbuffered(A, B, C, MUTT_PASS)
 
-int mutt_get_postponed(struct Context *ctx, struct Header *hdr, struct Header **cur, char *fcc, size_t fcclen);
+int mutt_get_postponed(struct Context *ctx, struct Header *hdr, struct Header **cur);
 int mutt_parse_crypt_hdr(const char *p, int set_empty_signas, int crypt_app);
 int mutt_get_tmp_attachment(struct Body *a);
 int mutt_index_menu(void);
@@ -315,7 +314,7 @@ int mutt_smtp_send(const struct Address *from, const struct Address *to, const s
 
 size_t mutt_wstr_trunc(const char *src, size_t maxlen, size_t maxwid, size_t *width);
 int mutt_strwidth(const char *s);
-int mutt_compose_menu(struct Header *msg, char *fcc, size_t fcclen, struct Header *cur, int flags);
+int mutt_compose_menu(struct Header *msg, struct Header *cur, int flags);
 int mutt_thread_set_flag(struct Header *hdr, int flag, int bf, int subthread);
 void mutt_update_num_postponed(void);
 int mutt_write_fcc(const char *path, struct Header *hdr, const char *msgid, int post,
